@@ -171,6 +171,7 @@ app.get('/obtenerUsuarios/:sk_usuario', (req, res) => {
     const sk_usuario = req.params.sk_usuario;
     const host = String(req.protocol + '://' + req.headers.host);
     console.log(host);
+    console.log('dirname', __dirname);
     db.one(`
     SELECT N1.*, DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) as dias_restantes FROM
     (
