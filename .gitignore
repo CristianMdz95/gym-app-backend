@@ -1,3 +1,6 @@
+#imagenes
+storage/
+
 # Logs
 logs
 *.log

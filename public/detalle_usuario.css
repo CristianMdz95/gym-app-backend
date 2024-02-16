@@ -1,0 +1,54 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: rgb(77, 76, 76);
+  }
+  
+  h1 {
+    color: #333;
+  }
+  
+  p {
+    color: #666;
+  }
+
+  #divUno {
+    display: flex; 
+    justify-content: center; 
+    padding: 1.0rem; 
+  }
+
+  #divDos {
+    padding: 0.5rem; 
+    border-radius: 0.75rem; 
+    border-width: 2px; 
+    background-color: #F3F4F6; 
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); 
+    width: 100%;
+  }
+
+  #divTres {
+    display: flex; 
+    justify-content: center; 
+    font-family: Georgia, Cambria, "Times New Roman", Times, serif; 
+  }
+
+
+  #divCinco{
+    padding: 0.5rem; 
+    padding-top: 0.75rem; 
+    font-size: 1.25rem;
+    line-height: 1.75rem; 
+    font-weight: 100; 
+    text-transform: uppercase; 
+
+  }
+
+  #h1Uno {
+    font-family: Georgia, Cambria, "Times New Roman", Times, serif; 
+    font-size: 1.2rem;
+    line-height: 2rem; 
+    text-transform: uppercase; 
+  }
+

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Detalle del usuario</title>
+    <link rel="stylesheet" type="text/css" href="/detalle_usuario.css" />
+  </head>
+  <body>
+    <div id='divUno' >
+      <div id='divDos'>
+        <div id='divTres'>
+          <h1 id='h1Uno'><%= usuario.s_nombre_completo %></h1>
+        </div>
+        <hr>
+        <div id='divCinco'>
+          <p>Dias restantes: <br/> <b> <%= usuario.dias_restantes %> </b></p>
+          <p>Fecha de renovación: <br/> <b> <%= usuario.d_fecha_renovacion %> </b></p>
+          <p>Fecha de inscripción: <br/> <b> <%= usuario.d_fecha_inscripcion %> </b></p>
+          <p>Fecha de Creación: <br/> <b> <%= usuario.d_fecha_creacion %> </b></p>
+        </div>
+        <hr>
+        <div id='divTres'>
+            <h1 id='h1Uno'>Champio's gym</h1>
+          </div>
+      </div>
+    </div>
+  </body>
+</html>

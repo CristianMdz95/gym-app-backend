@@ -1,0 +1,15 @@
+{
+    "sqltools.connections": [
+        {
+            "pgOptions": {
+                "ssl": true
+            },
+            "previewLimit": 50,
+            "server": "ep-wandering-snow-a55ot4r0.us-east-2.aws.neon.fl0.io",
+            "driver": "PostgreSQL",
+            "database": "gym-db",
+            "name": "Gym-App",
+            "connectString": "postgres://fl0user:6xlCBe8qOZEs@ep-wandering-snow-a55ot4r0.us-east-2.aws.neon.fl0.io:5432/gym-db?sslmode=require"
+        }
+    ]
+}
