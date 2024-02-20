@@ -57,7 +57,8 @@ app.post('/nuevo_usuario', upload.single('photo'), (req, res) => {
         s_foto,
         d_fecha_nacimiento,
         d_fecha_inscripcion,
-        d_fecha_creacion
+        d_fecha_creacion,
+        sk_estatus
     ) VALUES (
         $1,
         $2,
@@ -67,8 +68,9 @@ app.post('/nuevo_usuario', upload.single('photo'), (req, res) => {
         $6,
         TO_DATE($7, \'DD/MM/YYYY\'),
         TO_DATE($8, \'DD/MM/YYYY\'),
+        $9
         CURRENT_TIMESTAMP
-    )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion])
+    )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion, 'AC'])
         .then(() => {
             res.status(200).json({ message: 'Usuario insertado correctamente', status: true });
         })
