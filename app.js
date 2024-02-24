@@ -285,7 +285,7 @@ app.post('/eliminarUsuario', (req, res) => {
         });
 });
  
-app.get('/obtenerUsuarios', verificarEstadoEmpresa, (req, res) => {
+app.get('/obtenerUsuarios', (req, res) => {
     const sk_empresa = req.query.sk_empresa
 
     db.any(`
