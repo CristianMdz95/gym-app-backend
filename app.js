@@ -56,27 +56,93 @@ app.set('view engine', 'ejs'); //Para leer archivos html en el backend
 app.use(express.static('public')) //para que las rutas sean publicas
 app.use('/storage', express.static(path.join(__dirname, 'storage'))); //Para definir la carpeta
 
+app.post('/login', (req, res) => {
 
+    const {
+        s_usuario,
+        s_password
+    } = req.body;
+
+    db.one(`
+    SELECT * FROM cat_empresas 
+    WHERE s_usuario = '${s_usuario}'
+    AND s_password = '${s_password}'`)
+        .then((response) => {
+            res.status(200).json({ data: response, message: 'Usuario insertado correctamente', status: true });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Credenciales incorrectas.', status: false });
+        });
+});
 // LOCAL app.post('/nuevo_usuario', upload.single('photo'), (req, res) => {
 app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
 
-    if (!req.file) {
-        res.status(400).send('Error, archivo no subido.');
-        return;
-    }
+    if (req.file) {
+        // Crea un nuevo blob en el bucket y sube los datos del archivo
+        const blob = bucket.file(req.file.originalname);
+        const blobStream = blob.createWriteStream();
 
-    // Crea un nuevo blob en el bucket y sube los datos del archivo
-    const blob = bucket.file(req.file.originalname);
-    const blobStream = blob.createWriteStream();
+        blobStream.on('error', err => {
+            next(err);
+        });
 
-    blobStream.on('error', err => {
-        next(err);
-    });
+        blobStream.on('finish', () => {
+            // La URL pública se puede usar para acceder al archivo directamente a través de HTTP
+            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
 
-    blobStream.on('finish', () => {
-        // La URL pública se puede usar para acceder al archivo directamente a través de HTTP
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+            const {
+                s_nombre,
+                s_apellido_paterno,
+                s_apellido_materno,
+                s_telefono,
+                d_fecha_nacimiento,
+                d_fecha_inscripcion,
+                sk_empresa
+            } = req.body;
 
+            const s_foto = publicUrl; // Usamos la URL pública de la imagen
+            let sk_usuario = uuidv4();
+            db.none(`
+              SET TIMEZONE='America/Mexico_City';
+              
+              INSERT INTO cat_usuarios
+              (
+                  sk_usuario,
+                  s_nombre,
+                  s_apellido_paterno,
+                  s_apellido_materno,
+                  s_telefono,
+                  s_foto,
+                  d_fecha_nacimiento,
+                  d_fecha_inscripcion,
+                  sk_estatus,
+                  sk_empresa,
+                  d_fecha_creacion
+              ) VALUES (
+                  $1,
+                  $2,
+                  $3,
+                  $4,
+                  $5,
+                  $6,
+                  TO_DATE($7, \'DD/MM/YYYY\'),
+                  TO_DATE($8, \'DD/MM/YYYY\'),
+                  $9,
+                  $10,
+                  CURRENT_TIMESTAMP
+              )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion, 'AC', sk_empresa])
+                .then((data) => {
+                    res.status(200).json({ message: 'Usuario insertado correctamente', status: true });
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    res.status(500).json({ message: 'Hubo un error al insertar el usuario', status: false });
+                });
+        });
+
+        blobStream.end(req.file.buffer);
+    } else {
         const {
             s_nombre,
             s_apellido_paterno,
@@ -84,9 +150,10 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
             s_telefono,
             d_fecha_nacimiento,
             d_fecha_inscripcion,
+            sk_empresa
         } = req.body;
 
-        const s_foto = publicUrl; // Usamos la URL pública de la imagen
+        const s_foto = null; // Usamos la URL pública de la imagen
         let sk_usuario = uuidv4();
         db.none(`
           SET TIMEZONE='America/Mexico_City';
@@ -102,6 +169,7 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
               d_fecha_nacimiento,
               d_fecha_inscripcion,
               sk_estatus,
+              sk_empresa,
               d_fecha_creacion
           ) VALUES (
               $1,
@@ -113,21 +181,24 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
               TO_DATE($7, \'DD/MM/YYYY\'),
               TO_DATE($8, \'DD/MM/YYYY\'),
               $9,
+              $10,
               CURRENT_TIMESTAMP
-          )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion, 'AC'])
-            .then(() => {
+          )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion, 'AC', sk_empresa])
+            .then((data) => {
                 res.status(200).json({ message: 'Usuario insertado correctamente', status: true });
             })
             .catch((error) => {
                 console.error('Error:', error);
                 res.status(500).json({ message: 'Hubo un error al insertar el usuario', status: false });
             });
-    });
+    }
 
-    blobStream.end(req.file.buffer);
+
+
 });
 
 app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
+
     const {
         sk_usuario,
         s_nombre,
@@ -138,35 +209,55 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
         d_fecha_inscripcion,
     } = req.body;
 
-    if (!req.file) {
-        res.status(400).send('No file uploaded.');
-        return;
-    }
+    //en caso de que tenga imagen
+    if (req.file) {
+        // Crea un nuevo blob en el bucket y sube los datos del archivo
+        const blob = bucket.file(req.file.originalname);
+        const blobStream = blob.createWriteStream();
 
-    // Crea un nuevo blob en el bucket y sube los datos del archivo
-    const blob = bucket.file(req.file.originalname);
-    const blobStream = blob.createWriteStream();
+        blobStream.on('error', err => {
+            next(err);
+        });
 
-    blobStream.on('error', err => {
-        next(err);
-    });
+        blobStream.on('finish', () => {
+            // La URL pública se puede usar para acceder al archivo directamente a través de HTTP
+            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
 
-    blobStream.on('finish', () => {
-        // La URL pública se puede usar para acceder al archivo directamente a través de HTTP
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+            const s_foto = publicUrl; // Usamos la URL pública de la imagen
 
-        const s_foto = publicUrl; // Usamos la URL pública de la imagen
+            db.none(`
+          UPDATE cat_usuarios SET
+          s_nombre = '${s_nombre}',
+          s_apellido_paterno = '${s_apellido_paterno}',
+          s_apellido_materno = '${s_apellido_materno}',
+          s_telefono = '${s_telefono}',
+          s_foto = '${s_foto}',
+          d_fecha_nacimiento = TO_DATE('${d_fecha_nacimiento}', \'DD/MM/YYYY\'),
+          d_fecha_inscripcion = TO_DATE('${d_fecha_inscripcion}', \'DD/MM/YYYY\')
+          WHERE sk_usuario = '${sk_usuario}'`)
+                .then(() => {
+                    res.status(200).json({ message: 'Usuario modificado correctamente', status: true });
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    res.status(500).json({ message: 'Hubo un error al modificar el usuario', status: false });
+                });
+        });
 
+        blobStream.end(req.file.buffer);
+
+    } else {
+        //En caso de que no tenga imagen
         db.none(`
-      UPDATE cat_usuarios SET
-      s_nombre = '${s_nombre}',
-      s_apellido_paterno = '${s_apellido_paterno}',
-      s_apellido_materno = '${s_apellido_materno}',
-      s_telefono = '${s_telefono}',
-      s_foto = '${s_foto}',
-      d_fecha_nacimiento = TO_DATE('${d_fecha_nacimiento}', \'DD/MM/YYYY\'),
-      d_fecha_inscripcion = TO_DATE('${d_fecha_inscripcion}', \'DD/MM/YYYY\')
-      WHERE sk_usuario = '${sk_usuario}'`)
+        UPDATE cat_usuarios SET
+        s_nombre = '${s_nombre}',
+        s_apellido_paterno = '${s_apellido_paterno}',
+        s_apellido_materno = '${s_apellido_materno}',
+        s_telefono = '${s_telefono}',
+        s_foto = s_foto,
+        d_fecha_nacimiento = TO_DATE('${d_fecha_nacimiento}', \'DD/MM/YYYY\'),
+        d_fecha_inscripcion = TO_DATE('${d_fecha_inscripcion}', \'DD/MM/YYYY\')
+        WHERE sk_usuario = '${sk_usuario}'`)
             .then(() => {
                 res.status(200).json({ message: 'Usuario modificado correctamente', status: true });
             })
@@ -174,9 +265,11 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
                 console.error('Error:', error);
                 res.status(500).json({ message: 'Hubo un error al modificar el usuario', status: false });
             });
-    });
 
-    blobStream.end(req.file.buffer);
+    }
+
+
+
 });
 
 app.post('/eliminarUsuario', (req, res) => {
@@ -198,8 +291,10 @@ app.post('/eliminarUsuario', (req, res) => {
             res.status(500).json({ message: 'Hubo un error al eliminar el usuario', status: false });
         });
 });
+ 
+app.get('/obtenerUsuarios', verificarEstadoEmpresa, (req, res) => {
+    const sk_empresa = req.query.sk_empresa
 
-app.get('/obtenerUsuarios', (req, res) => {
     db.any(`
     SELECT N2.* FROM (
         SELECT N1.*, DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) as dias_restantes FROM
@@ -216,10 +311,24 @@ app.get('/obtenerUsuarios', (req, res) => {
                 d_fecha_nacimiento,
                 d_fecha_inscripcion,
                 d_fecha_inscripcion + INTERVAL '1 month' as d_fecha_renovacion,
-                d_fecha_creacion
-                FROM cat_usuarios WHERE sk_estatus = 'AC'
+                d_fecha_creacion,
+                sk_empresa
+                FROM cat_usuarios
+                WHERE sk_estatus = 'AC'
+                AND sk_empresa = '${sk_empresa}'
             ) AS N1
         ) AS N2 ORDER BY N2.dias_restantes `)
+        .then((data) => {
+            res.json({ data: data, success: true, message: 'Datos cargados exitosamente!' })
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al agregar el usuario', success: false });
+        });
+})
+
+app.get('/obtenerClientes', (req, res) => {
+    db.any(`SELECT * FROM cat_empresas WHERE i_administrador = 0 `)
         .then((data) => {
             res.json(data)
         })
@@ -313,6 +422,27 @@ app.get('/detalle_usuario/:sk_usuario', (req, res) => {
 
 async function deletePhoto(bucketName, filename) {
     await storage.bucket(bucketName).file(filename).delete();
+}
+
+function verificarEstadoEmpresa(req, res, next) {
+    const sk_empresa = req.query.sk_empresa || req.body.sk_empresa;
+
+    if (!sk_empresa) {
+        res.status(403).json({ message: 'Error en el middelware.', success: false, empresa_cancelada: true });
+    }
+
+    db.one(`SELECT sk_estatus FROM cat_empresas WHERE sk_empresa = '${sk_empresa}'`)
+        .then((data) => {
+            if (data.sk_estatus === 'CA') {
+                res.status(403).json({ message: 'La empresa se encuentra cancelada, favor de contactarte con el desarrollador.', success: false, empresa_cancelada: true });
+            } else {
+                next()
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al verificar el estado de la empresa', success: false, empresa_cancelada: true });
+        });
 }
 
 app.listen(port, () => {
