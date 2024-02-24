@@ -68,7 +68,40 @@ app.post('/login', (req, res) => {
         });
 });
 
-// LOCAL app.post('/nuevo_usuario', upload.single('photo'), (req, res) => {
+
+/* ******************************* CLIENTES ************************************* */
+
+app.get('/obtenerClientes', (req, res) => {
+    db.any(`SELECT * FROM cat_empresas WHERE i_administrador = 0 ORDER BY s_nombre_empresa ASC `)
+        .then((data) => {
+            res.json(data)
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al agregar el usuario', status: false });
+        });
+})
+
+app.post('/cambiarEstatusCliente', (req, res) => {
+
+    const {
+        sk_estatus,
+        sk_empresa
+    } = req.body;
+
+    db.none('UPDATE cat_empresas SET sk_estatus = $1 WHERE sk_empresa = $2', [sk_estatus, sk_empresa])
+        .then(() => {
+            res.status(200).json({ message: 'Se modifico el estatus del cliente correctamente.', status: true });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al modificar el estatus del cliente', status: false });
+        });
+});
+
+
+/* ******************************* USUARIOS ************************************* */
+
 app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
 
     if (req.file) {
@@ -273,7 +306,7 @@ app.post('/eliminarUsuario', (req, res) => {
 
     db.none(`
     UPDATE cat_usuarios SET
-    sk_estatus = 'CA',
+    sk_estatus = 'IN',
     d_fecha_cancelado = CURRENT_TIMESTAMP
     WHERE sk_usuario = '${sk_usuario}' `)
         .then(() => {
@@ -284,9 +317,18 @@ app.post('/eliminarUsuario', (req, res) => {
             res.status(500).json({ message: 'Hubo un error al eliminar el usuario', status: false });
         });
 });
- 
-app.get('/obtenerUsuarios', (req, res) => {
+
+app.get('/obtenerUsuarios', async (req, res) => {
     const sk_empresa = req.query.sk_empresa
+    const i_administrador = req.query.i_administrador
+    /* Validacion para verificar el estatus del cliente */
+    if (i_administrador == 0) {
+        const middelware = await verificarEstadoEmpresa(sk_empresa);
+        if (!middelware.success) {
+            return res.json(middelware)
+        }
+    }
+
 
     db.any(`
     SELECT N2.* FROM (
@@ -312,22 +354,11 @@ app.get('/obtenerUsuarios', (req, res) => {
             ) AS N1
         ) AS N2 ORDER BY N2.dias_restantes `)
         .then((data) => {
-            res.json({ data: data, success: true, message: 'Datos cargados exitosamente!' })
+            return res.json({ data: data, success: true, message: 'Datos cargados exitosamente!' })
         })
         .catch((error) => {
             console.error('Error:', error);
             res.status(500).json({ message: 'Hubo un error al agregar el usuario', success: false });
-        });
-})
-
-app.get('/obtenerClientes', (req, res) => {
-    db.any(`SELECT * FROM cat_empresas WHERE i_administrador = 0 `)
-        .then((data) => {
-            res.json(data)
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-            res.status(500).json({ message: 'Hubo un error al agregar el usuario', status: false });
         });
 })
 
@@ -417,25 +448,28 @@ async function deletePhoto(bucketName, filename) {
     await storage.bucket(bucketName).file(filename).delete();
 }
 
-function verificarEstadoEmpresa(req, res, next) {
-    const sk_empresa = req.query.sk_empresa || req.body.sk_empresa;
+async function verificarEstadoEmpresa(sk_empresa) {
+
+    let result;
 
     if (!sk_empresa) {
-        res.status(403).json({ message: 'Error en el middelware.', success: false, empresa_cancelada: true });
+        return false
     }
 
-    db.one(`SELECT sk_estatus FROM cat_empresas WHERE sk_empresa = '${sk_empresa}'`)
+    await db.one(`SELECT sk_estatus FROM cat_empresas WHERE sk_empresa = $1`, [sk_empresa])
         .then((data) => {
-            if (data.sk_estatus === 'CA') {
-                res.status(403).json({ message: 'La empresa se encuentra cancelada, favor de contactarte con el desarrollador.', success: false, empresa_cancelada: true });
+            if (data.sk_estatus === 'AC') {
+                result = { message: 'La empresa si esta activa', success: true, empresa_cancelada: false }
             } else {
-                next()
+                result = { message: 'La empresa se encuentra cancelada, favor de contactarte con el desarrollador.', success: false, empresa_cancelada: true }
             }
         })
         .catch((error) => {
-            console.error('Error:', error);
-            res.status(500).json({ message: 'Hubo un error al verificar el estado de la empresa', success: false, empresa_cancelada: true });
+            console.log(error)
+            return false
         });
+
+    return result
 }
 
 app.listen(port, () => {
