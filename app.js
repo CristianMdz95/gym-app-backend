@@ -57,24 +57,17 @@ app.use(express.static('public')) //para que las rutas sean publicas
 app.use('/storage', express.static(path.join(__dirname, 'storage'))); //Para definir la carpeta
 
 app.post('/login', (req, res) => {
-
-    const {
-        s_usuario,
-        s_password
-    } = req.body;
-
-    db.one(`
-    SELECT * FROM cat_empresas 
-    WHERE s_usuario = '${s_usuario}'
-    AND s_password = '${s_password}'`)
+    const { s_usuario, s_password } = req.body;
+    db.one('SELECT * FROM cat_empresas WHERE s_usuario = $1 AND s_password = $2', [s_usuario, s_password])
         .then((response) => {
-            res.status(200).json({ data: response, message: 'Usuario insertado correctamente', status: true });
+            res.status(200).json({ data: response, message: 'Credenciales correctas', status: true });
         })
         .catch((error) => {
             console.error('Error:', error);
-            res.status(500).json({ message: 'Credenciales incorrectas.', status: false });
+            res.status(500).json({ message: 'Credenciales incorrectas', status: false });
         });
 });
+
 // LOCAL app.post('/nuevo_usuario', upload.single('photo'), (req, res) => {
 app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
 
