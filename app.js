@@ -398,6 +398,7 @@ app.get('/obtenerUsuarios/:sk_usuario', (req, res) => {
                     cu.s_apellido_materno,
                     cu.s_telefono,
                     cu.s_foto,
+                    cu.s_foto AS url_foto,
                     cu.d_fecha_nacimiento,
                     cu.d_fecha_inscripcion,
                     cu.d_fecha_inscripcion + INTERVAL '1 month' AS d_fecha_renovacion,
