@@ -331,28 +331,40 @@ app.get('/obtenerUsuarios', async (req, res) => {
 
 
     db.any(`
-    SELECT N2.* FROM (
-        SELECT N1.*, DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) as dias_restantes FROM
-            (
+            SET TIMEZONE='America/Mexico_City';
+
+            SELECT N2.*,
+            CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
+                        AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
+                    THEN 1
+                    ELSE 0
+            END AS cumpleaños
+        FROM (
+            SELECT N1.*,
+                DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) AS dias_restantes
+            FROM (
                 SELECT 
-                sk_estatus,
-                sk_usuario,
-                s_nombre,
-                CONCAT(s_nombre, ' ', s_apellido_paterno, ' ', s_apellido_materno) AS s_nombre_completo,
-                s_apellido_paterno,
-                s_apellido_materno,
-                s_telefono,
-                s_foto,
-                d_fecha_nacimiento,
-                d_fecha_inscripcion,
-                d_fecha_inscripcion + INTERVAL '1 month' as d_fecha_renovacion,
-                d_fecha_creacion,
-                sk_empresa
-                FROM cat_usuarios
-                WHERE sk_estatus = 'AC'
-                AND sk_empresa = '${sk_empresa}'
+                    cu.sk_estatus,
+                    cu.sk_usuario,
+                    cu.s_nombre,
+                    CONCAT(cu.s_nombre, ' ', cu.s_apellido_paterno, ' ', cu.s_apellido_materno) AS s_nombre_completo,
+                    cu.s_apellido_paterno,
+                    cu.s_apellido_materno,
+                    cu.s_telefono,
+                    cu.s_foto,
+                    cu.d_fecha_nacimiento,
+                    cu.d_fecha_inscripcion,
+                    cu.d_fecha_inscripcion + INTERVAL '1 month' AS d_fecha_renovacion,
+                    cu.d_fecha_creacion,
+                    cu.sk_empresa,
+                    ce.s_nombre_empresa
+                FROM cat_usuarios cu
+                INNER JOIN cat_empresas ce ON ce.sk_empresa = cu.sk_empresa
+                WHERE cu.sk_estatus = 'AC'
+                AND ce.sk_empresa = $1
             ) AS N1
-        ) AS N2 ORDER BY N2.dias_restantes `)
+        ) AS N2
+        ORDER BY N2.dias_restantes `, [sk_empresa])
         .then((data) => {
             return res.json({ data: data, success: true, message: 'Datos cargados exitosamente!' })
         })
@@ -367,22 +379,38 @@ app.get('/obtenerUsuarios/:sk_usuario', (req, res) => {
     const host = process.env.HOSTURL ?? String(req.protocol + '://' + req.headers.host)
 
     db.one(`
-    SELECT N1.*, DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) as dias_restantes FROM
-    (
-        SELECT sk_usuario,
-        s_nombre,
-        CONCAT(s_nombre, ' ', s_apellido_paterno, ' ', s_apellido_materno) AS s_nombre_completo,
-        s_apellido_paterno,
-        s_apellido_materno,
-        s_telefono,
-        s_foto,
-        s_foto AS url_foto,
-        d_fecha_nacimiento,
-        d_fecha_inscripcion,
-        d_fecha_inscripcion + INTERVAL '1 month' as d_fecha_renovacion,
-        d_fecha_creacion
-        FROM cat_usuarios
-    ) AS N1 WHERE N1.sk_usuario = '${sk_usuario}'`)
+    SELECT N2.*,
+            CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
+                        AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
+                    THEN 1
+                    ELSE 0
+            END AS cumpleaños
+        FROM (
+            SELECT N1.*,
+                DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) AS dias_restantes
+            FROM (
+                SELECT 
+                    cu.sk_estatus,
+                    cu.sk_usuario,
+                    cu.s_nombre,
+                    CONCAT(cu.s_nombre, ' ', cu.s_apellido_paterno, ' ', cu.s_apellido_materno) AS s_nombre_completo,
+                    cu.s_apellido_paterno,
+                    cu.s_apellido_materno,
+                    cu.s_telefono,
+                    cu.s_foto,
+                    cu.d_fecha_nacimiento,
+                    cu.d_fecha_inscripcion,
+                    cu.d_fecha_inscripcion + INTERVAL '1 month' AS d_fecha_renovacion,
+                    cu.d_fecha_creacion,
+                    cu.sk_empresa,
+                    ce.s_nombre_empresa
+                FROM cat_usuarios cu
+                INNER JOIN cat_empresas ce ON ce.sk_empresa = cu.sk_empresa
+                WHERE cu.sk_estatus = 'AC'
+                AND sk_usuario = $1
+            ) AS N1
+        ) AS N2
+        ORDER BY N2.dias_restantes`, [sk_usuario])
         .then((data) => {
             res.json(data)
         })
