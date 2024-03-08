@@ -58,7 +58,17 @@ app.use('/storage', express.static(path.join(__dirname, 'storage'))); //Para def
 
 app.post('/login', (req, res) => {
     const { s_usuario, s_password } = req.body;
-    db.one('SELECT * FROM cat_empresas WHERE s_usuario = $1 AND s_password = $2', [s_usuario, s_password])
+
+    db.one(`SELECT 
+            cl.*,
+            ce.sk_estatus AS sk_estatus_empresa,
+            ce.s_nombre_empresa,
+            ce.i_administrador
+            FROM cat_licencias cl
+            INNER JOIN cat_empresas ce ON ce.sk_empresa = cl.sk_empresa
+            WHERE cl.s_usuario = $1
+            AND cl.s_password = $2`,
+        [s_usuario, s_password])
         .then((response) => {
             res.status(200).json({ data: response, message: 'Credenciales correctas', status: true });
         })
@@ -68,11 +78,146 @@ app.post('/login', (req, res) => {
         });
 });
 
+/* ******************************* NEGOCIOS ************************************* */
+
+app.post('/nuevo_negocio', (req, res, next) => {
+
+    const {
+        s_nombre_empresa,
+    } = req.body;
+
+    let sk_empresa = uuidv4();
+    db.none(`
+      SET TIMEZONE='America/Mexico_City';
+      
+      INSERT INTO cat_empresas
+      (
+          sk_empresa,
+          s_usuario,
+          s_password,
+          d_fecha_creacion,
+          sk_estatus,
+          i_administrador,
+          s_nombre_empresa
+      ) VALUES (
+          $1,
+          $2,
+          $3,
+          CURRENT_TIMESTAMP,
+          $4,
+          $5,
+          $6
+      )`, [sk_empresa, 'prueba', 'prueba', 'AC', 0, s_nombre_empresa])
+        .then((data) => {
+            console.log(data)
+            res.status(200).json({ message: 'Negocio insertado correctamente', status: true });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al insertar el negocio', status: false });
+        });
+
+
+
+});
+
+app.post('/nueva_licencia', (req, res, next) => {
+
+    const {
+        s_nombre,
+        s_usuario,
+        s_password,
+        sk_empresa,
+    } = req.body;
+
+    if (req.body.sk_licencia) {
+        let sk_licencia = req.body.sk_licencia;
+        db.none(`
+            UPDATE cat_licencias SET 
+            s_nombre = $1,
+            s_usuario = $2,
+            s_password = $3
+            WHERE sk_licencia = $4`,
+            [s_nombre, s_usuario, s_password, sk_licencia])
+            .then((data) => {
+                console.log(data)
+                res.status(200).json({ message: 'Licencia modificada correctamente', status: true });
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                res.status(500).json({ message: 'Hubo un error al modificar la licencia.', status: false });
+            });
+
+    } else {
+
+        let sk_licencia = uuidv4();
+        db.none(`
+          SET TIMEZONE='America/Mexico_City';
+          
+          INSERT INTO cat_licencias
+          (
+              sk_licencia,
+              sk_estatus,
+              s_usuario,
+              s_password,
+              d_fecha_creacion,
+              sk_empresa,
+              s_nombre
+          ) VALUES (
+              $1,
+              $2,
+              $3,
+              $4,
+              CURRENT_TIMESTAMP, 
+              $5,
+              $6
+          )`, [sk_licencia, 'AC', s_usuario, s_password, sk_empresa, s_nombre])
+            .then((data) => {
+                console.log(data)
+                res.status(200).json({ message: 'Licencia creada correctamente', status: true });
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                res.status(500).json({ message: 'Hubo un error al crear la licencia.', status: false });
+            });
+    }
+
+});
+
+app.post('/eliminar_licencia', (req, res) => {
+
+    const { sk_licencia } = req.body;
+
+    db.none(`DELETE FROM cat_licencias WHERE sk_licencia = $1 `, [sk_licencia])
+        .then(() => {
+            res.status(200).json({ message: 'Licencia eliminada correctamente', status: true });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al eliminar la licencia', status: false });
+        });
+});
 
 /* ******************************* CLIENTES ************************************* */
 
 app.get('/obtenerClientes', (req, res) => {
     db.any(`SELECT * FROM cat_empresas WHERE i_administrador = 0 ORDER BY s_nombre_empresa ASC `)
+        .then((data) => {
+            res.json(data)
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al agregar el usuario', status: false });
+        });
+})
+
+app.post('/obtenerLicencias', (req, res) => {
+
+    const {
+        sk_empresa
+    } = req.body
+
+    db.any(`SELECT * FROM cat_licencias WHERE sk_empresa = $1`, [sk_empresa])
         .then((data) => {
             res.json(data)
         })
@@ -99,6 +244,22 @@ app.post('/cambiarEstatusCliente', (req, res) => {
         });
 });
 
+app.post('/cambiarEstatusLicencia', (req, res) => {
+
+    const {
+        sk_estatus,
+        sk_licencia
+    } = req.body;
+
+    db.none('UPDATE cat_licencias SET sk_estatus = $1 WHERE sk_licencia = $2', [sk_estatus, sk_licencia])
+        .then(() => {
+            res.status(200).json({ message: 'Se modifico el estatus de la licencia del cliente correctamente.', estatus: true });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al modificar el estatus de la licencia', estatus: false });
+        });
+});
 
 /* ******************************* USUARIOS ************************************* */
 
@@ -319,13 +480,22 @@ app.post('/eliminarUsuario', (req, res) => {
 });
 
 app.get('/obtenerUsuarios', async (req, res) => {
+
     const sk_empresa = req.query.sk_empresa
     const i_administrador = req.query.i_administrador
+    const sk_licencia = req.query.sk_licencia
+
     /* Validacion para verificar el estatus del cliente */
+
     if (i_administrador == 0) {
-        const middelware = await verificarEstadoEmpresa(sk_empresa);
-        if (!middelware.success) {
-            return res.json(middelware)
+        const middelware_empresa = await verificarEstadoEmpresa(sk_empresa);
+        if (!middelware_empresa.success) {
+            return res.json(middelware_empresa)
+        }
+
+        const middelware_licencia = await verificarEstadoLicencia(sk_licencia);
+        if (!middelware_licencia.success) {
+            return res.json(middelware_licencia)
         }
     }
 
@@ -374,12 +544,26 @@ app.get('/obtenerUsuarios', async (req, res) => {
         });
 })
 
-app.get('/obtenerUsuarios/:sk_usuario', (req, res) => {
+app.get('/obtenerUsuarios/:sk_usuario', async (req, res) => {
     const sk_usuario = req.params.sk_usuario;
-    const host = process.env.HOSTURL ?? String(req.protocol + '://' + req.headers.host)
+    const sk_empresa = req.query.sk_empresa
+    const i_administrador = req.query.i_administrador
+    const sk_licencia = req.query.sk_licencia
+
+    if (i_administrador == 0) {
+        const middelware_empresa = await verificarEstadoEmpresa(sk_empresa);
+        if (!middelware_empresa.success) {
+            return res.json(middelware_empresa)
+        }
+
+        const middelware_licencia = await verificarEstadoLicencia(sk_licencia);
+        if (!middelware_licencia.success) {
+            return res.json(middelware_licencia)
+        }
+    }
 
     db.one(`
-    SELECT N2.*,
+    SELECT N2.*, 
             CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
                     THEN 1
@@ -490,7 +674,31 @@ async function verificarEstadoEmpresa(sk_empresa) {
             if (data.sk_estatus === 'AC') {
                 result = { message: 'La empresa si esta activa', success: true, empresa_cancelada: false }
             } else {
-                result = { message: 'La empresa se encuentra cancelada, favor de contactarte con el desarrollador.', success: false, empresa_cancelada: true }
+                result = { message: 'La empresa se encuentra INACTIVA', success: false, empresa_cancelada: true }
+            }
+        })
+        .catch((error) => {
+            console.log(error)
+            return false
+        });
+
+    return result
+}
+
+async function verificarEstadoLicencia(sk_licencia) {
+
+    let result;
+
+    if (!sk_licencia) {
+        return false
+    }
+
+    await db.one(`SELECT sk_estatus FROM cat_licencias WHERE sk_licencia = $1`, [sk_licencia])
+        .then((data) => {
+            if (data.sk_estatus === 'AC') {
+                result = { message: 'La licencia si esta activa', success: true, empresa_cancelada: false }
+            } else {
+                result = { message: 'La licencia se encuentra INACTIVA', success: false, empresa_cancelada: true }
             }
         })
         .catch((error) => {
