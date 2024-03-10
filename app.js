@@ -26,20 +26,6 @@ const multer = Multer({
     },
 });
 
-/* 
-LOCAL
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'storage/')
-    },
-    filename: function (req, file, cb) {
-        cb(null, file.originalname)
-    }
-}) 
-
-const upload = multer({ storage: storage });
-*/
-
 //Conección a la base de datos de postgresql
 const pgp = require('pg-promise')();
 const db = pgp(
@@ -49,6 +35,8 @@ const db = pgp(
 
 const app = express();
 const port = process.env.PORT ?? 3001;
+let version = process.env.VERSION ?? '1.2.0';
+let url_descarga = process.env.URL_VERSION ?? 'https://storage.googleapis.com/gym-app-fotos/Nuevo_Version/Gym%20App%201.2.0.apk';
 
 app.use(bodyParser.json());
 
@@ -76,6 +64,15 @@ app.post('/login', (req, res) => {
             console.error('Error:', error);
             res.status(500).json({ message: 'Credenciales incorrectas', status: false });
         });
+});
+
+app.post('/obtenerVersion', (req, res) => {
+    res.status(200).json({
+        data: {
+            version,
+            url_descarga
+        }, message: 'Version', status: true
+    });
 });
 
 /* ******************************* NEGOCIOS ************************************* */
@@ -264,10 +261,10 @@ app.post('/cambiarEstatusLicencia', (req, res) => {
 /* ******************************* USUARIOS ************************************* */
 
 app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
-
     if (req.file) {
         // Crea un nuevo blob en el bucket y sube los datos del archivo
-        const blob = bucket.file(req.file.originalname);
+        const sk_empresa_carpeta = req.body.sk_empresa;
+        const blob = bucket.file(`${sk_empresa_carpeta}/${req.file.originalname}`);
         const blobStream = blob.createWriteStream();
 
         blobStream.on('error', err => {
@@ -385,7 +382,6 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
 });
 
 app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
-
     const {
         sk_usuario,
         s_nombre,
@@ -399,7 +395,9 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
     //en caso de que tenga imagen
     if (req.file) {
         // Crea un nuevo blob en el bucket y sube los datos del archivo
-        const blob = bucket.file(req.file.originalname);
+        const sk_empresa_carpeta = req.body.sk_empresa;
+        const blob = bucket.file(`${sk_empresa_carpeta}/${req.file.originalname}`);
+        //const blob = bucket.file(req.file.originalname);
         const blobStream = blob.createWriteStream();
 
         blobStream.on('error', err => {
@@ -610,9 +608,8 @@ app.post('/eliminarFoto', async (req, res) => {
 
     try {
         const data = await db.one(`SELECT s_foto FROM cat_usuarios WHERE sk_usuario = '${sk_usuario}' `);
-        const urlParts = data.s_foto.split('/');
+        const urlParts = data.s_foto.split(bucket_name+'/');
         const filename = urlParts[urlParts.length - 1];
-
         await deletePhoto(bucket_name, filename);
 
         await db.none(`UPDATE cat_usuarios SET s_foto = null WHERE sk_usuario = '${sk_usuario}' `);
