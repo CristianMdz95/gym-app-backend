@@ -4,7 +4,11 @@ const { v4: uuidv4 } = require('uuid');
 const express = require('express');
 const Multer = require('multer');
 const path = require('path');
-const moment = require('moment');
+//const moment = require('moment');
+const moment = require('moment-timezone');
+
+// Establece la zona horaria para México
+moment.tz.setDefault('America/Mexico_City');
 
 //GOOGLE CLOUD
 const { Storage } = require('@google-cloud/storage');
@@ -288,7 +292,7 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
             const s_foto = publicUrl; // Usamos la URL pública de la imagen
             let sk_usuario = uuidv4();
             db.none(`
-              SET TIMEZONE='America/Mexico_City';
+              SET TIMEZONE TO 'America/Mexico_City';
               
               INSERT INTO cat_usuarios
               (
