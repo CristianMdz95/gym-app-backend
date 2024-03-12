@@ -411,6 +411,8 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
             const s_foto = publicUrl; // Usamos la URL pública de la imagen
 
             db.none(`
+
+          SET TIMEZONE='America/Mexico_City';
           UPDATE cat_usuarios SET
           s_nombre = '${s_nombre}',
           s_apellido_paterno = '${s_apellido_paterno}',
@@ -561,6 +563,7 @@ app.get('/obtenerUsuarios/:sk_usuario', async (req, res) => {
     }
 
     db.one(`
+    SET TIMEZONE='America/Mexico_City';
     SELECT N2.*, 
             CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
@@ -608,7 +611,7 @@ app.post('/eliminarFoto', async (req, res) => {
 
     try {
         const data = await db.one(`SELECT s_foto FROM cat_usuarios WHERE sk_usuario = '${sk_usuario}' `);
-        const urlParts = data.s_foto.split(bucket_name+'/');
+        const urlParts = data.s_foto.split(bucket_name + '/');
         const filename = urlParts[urlParts.length - 1];
         await deletePhoto(bucket_name, filename);
 
@@ -625,6 +628,7 @@ app.get('/detalle_usuario/:sk_usuario', (req, res) => {
     const host = String(req.protocol + '://' + req.headers.host);
 
     db.one(`
+    SET TIMEZONE='America/Mexico_City';
     SELECT N1.*, DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) as dias_restantes FROM
     (
         SELECT sk_usuario,
