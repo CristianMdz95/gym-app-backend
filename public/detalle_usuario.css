@@ -12,7 +12,7 @@ body {
   p {
     color: #666;
   }
-
+  
   #divUno {
     display: flex; 
     justify-content: center; 
@@ -20,12 +20,17 @@ body {
   }
 
   #divDos {
-    padding: 0.5rem; 
     border-radius: 0.75rem; 
     border-width: 2px; 
     background-color: #F3F4F6; 
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); 
     width: 100%;
+  }
+
+  #divImg {
+    width: 100%; /* O el porcentaje deseado */
+    height: auto;
+     object-fit: cover;
   }
 
   #divTres {

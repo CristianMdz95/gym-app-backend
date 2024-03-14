@@ -39,7 +39,7 @@ const db = pgp(
 
 const app = express();
 const port = process.env.PORT ?? 3001;
-let version = process.env.VERSION ?? '1.2.0';
+let version = process.env.VERSION ?? '1.2.1';
 let url_descarga = process.env.URL_VERSION ?? 'https://storage.googleapis.com/gym-app-fotos/Nuevo_Version/Gym%20App%201.2.0.apk';
 
 app.use(bodyParser.json());
@@ -47,6 +47,10 @@ app.use(bodyParser.json());
 app.set('view engine', 'ejs'); //Para leer archivos html en el backend
 app.use(express.static('public')) //para que las rutas sean publicas
 app.use('/storage', express.static(path.join(__dirname, 'storage'))); //Para definir la carpeta
+
+
+// SET TIMEZONE='America/Mexico_City';
+
 
 app.post('/login', (req, res) => {
     const { s_usuario, s_password } = req.body;
@@ -89,7 +93,7 @@ app.post('/nuevo_negocio', (req, res, next) => {
 
     let sk_empresa = uuidv4();
     db.none(`
-      SET TIMEZONE='America/Mexico_City';
+     
       
       INSERT INTO cat_empresas
       (
@@ -153,7 +157,7 @@ app.post('/nueva_licencia', (req, res, next) => {
 
         let sk_licencia = uuidv4();
         db.none(`
-          SET TIMEZONE='America/Mexico_City';
+         
           
           INSERT INTO cat_licencias
           (
@@ -344,7 +348,7 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
         const s_foto = null; // Usamos la URL pública de la imagen
         let sk_usuario = uuidv4();
         db.none(`
-          SET TIMEZONE='America/Mexico_City';
+         
           
           INSERT INTO cat_usuarios
           (
@@ -416,7 +420,7 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
 
             db.none(`
 
-          SET TIMEZONE='America/Mexico_City';
+         
           UPDATE cat_usuarios SET
           s_nombre = '${s_nombre}',
           s_apellido_paterno = '${s_apellido_paterno}',
@@ -505,7 +509,7 @@ app.get('/obtenerUsuarios', async (req, res) => {
 
 
     db.any(`
-            SET TIMEZONE='America/Mexico_City';
+           
 
             SELECT N2.*,
             CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -567,7 +571,7 @@ app.get('/obtenerUsuarios/:sk_usuario', async (req, res) => {
     }
 
     db.one(`
-    SET TIMEZONE='America/Mexico_City';
+   
     SELECT N2.*, 
             CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
@@ -629,27 +633,43 @@ app.post('/eliminarFoto', async (req, res) => {
 
 app.get('/detalle_usuario/:sk_usuario', (req, res) => {
     const sk_usuario = req.params.sk_usuario;
-    const host = String(req.protocol + '://' + req.headers.host);
 
     db.one(`
-    SET TIMEZONE='America/Mexico_City';
-    SELECT N1.*, DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) as dias_restantes FROM
-    (
-        SELECT sk_usuario,
-        s_nombre,
-        CONCAT(s_nombre, ' ', s_apellido_paterno, ' ', s_apellido_materno) AS s_nombre_completo,
-        s_apellido_paterno,
-        s_apellido_materno,
-        s_telefono,
-        s_foto,
-        CONCAT('${host}', '/storage/', s_foto) url_foto,
-        d_fecha_nacimiento,
-        d_fecha_inscripcion,
-        d_fecha_inscripcion + INTERVAL '1 month' as d_fecha_renovacion,
-        d_fecha_creacion
-        FROM cat_usuarios
-    ) AS N1 WHERE N1.sk_usuario = '${sk_usuario}'`)
+   
+    SELECT N2.*, 
+            CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
+                        AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
+                    THEN 1
+                    ELSE 0
+            END AS cumpleaños
+        FROM (
+            SELECT N1.*,
+                DATE_PART('day', d_fecha_renovacion - CURRENT_DATE) AS dias_restantes
+            FROM (
+                SELECT 
+                    cu.sk_estatus,
+                    cu.sk_usuario,
+                    cu.s_nombre,
+                    CONCAT(cu.s_nombre, ' ', cu.s_apellido_paterno, ' ', cu.s_apellido_materno) AS s_nombre_completo,
+                    cu.s_apellido_paterno,
+                    cu.s_apellido_materno,
+                    cu.s_telefono,
+                    cu.s_foto,
+                    cu.d_fecha_nacimiento,
+                    cu.d_fecha_inscripcion,
+                    cu.d_fecha_inscripcion + INTERVAL '1 month' AS d_fecha_renovacion,
+                    cu.d_fecha_creacion,
+                    cu.sk_empresa,
+                    ce.s_nombre_empresa
+                FROM cat_usuarios cu
+                INNER JOIN cat_empresas ce ON ce.sk_empresa = cu.sk_empresa
+                WHERE cu.sk_estatus = 'AC'
+                AND sk_usuario = $1
+            ) AS N1
+        ) AS N2
+        ORDER BY N2.dias_restantes`, [sk_usuario])
         .then((data) => {
+            console.log('data',data)
             let d_fecha_inscripcion = moment(data.d_fecha_inscripcion).format('DD/MM/YYYY');
             let d_fecha_renovacion = moment(data.d_fecha_renovacion).format('DD/MM/YYYY');
             let d_fecha_creacion = moment(data.d_fecha_creacion).format('DD/MM/YYYY');
