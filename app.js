@@ -669,7 +669,6 @@ app.get('/detalle_usuario/:sk_usuario', (req, res) => {
         ) AS N2
         ORDER BY N2.dias_restantes`, [sk_usuario])
         .then((data) => {
-            console.log('data',data)
             let d_fecha_inscripcion = moment(data.d_fecha_inscripcion).format('DD/MM/YYYY');
             let d_fecha_renovacion = moment(data.d_fecha_renovacion).format('DD/MM/YYYY');
             let d_fecha_creacion = moment(data.d_fecha_creacion).format('DD/MM/YYYY');
