@@ -49,7 +49,7 @@ app.use(express.static('public')) //para que las rutas sean publicas
 app.use('/storage', express.static(path.join(__dirname, 'storage'))); //Para definir la carpeta
 
 
-// SET TIMEZONE='America/Mexico_City';
+// SET TIME ZONE 'America/Mexico_City';
 
 
 app.post('/login', (req, res) => {
@@ -288,6 +288,7 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
                 s_apellido_paterno,
                 s_apellido_materno,
                 s_telefono,
+                f_mensualidad,
                 d_fecha_nacimiento,
                 d_fecha_inscripcion,
                 sk_empresa
@@ -296,8 +297,7 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
             const s_foto = publicUrl; // Usamos la URL pública de la imagen
             let sk_usuario = uuidv4();
             db.none(`
-              SET TIMEZONE TO 'America/Mexico_City';
-              
+              SET TIME ZONE 'America/Mexico_City';
               INSERT INTO cat_usuarios
               (
                   sk_usuario,
@@ -310,7 +310,8 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
                   d_fecha_inscripcion,
                   sk_estatus,
                   sk_empresa,
-                  d_fecha_creacion
+                  d_fecha_creacion,
+                  f_mensualidad
               ) VALUES (
                   $1,
                   $2,
@@ -322,10 +323,24 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
                   TO_DATE($8, \'DD/MM/YYYY\'),
                   $9,
                   $10,
-                  CURRENT_TIMESTAMP
-              )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion, 'AC', sk_empresa])
+                  CURRENT_TIMESTAMP,
+                  $11
+              )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion, 'AC', sk_empresa, f_mensualidad])
                 .then((data) => {
-                    res.status(200).json({ message: 'Usuario insertado correctamente', status: true });
+                    /* SE REGISTRARÄ UNA NUEVA RENOVACIÓN DE USUARIO */
+                    let sk_renovacion = uuidv4();
+                    db.none(`
+                    SET TIME ZONE 'America/Mexico_City';
+                    INSERT INTO rel_usuarios_renovaciones
+                    (sk_renovacion, sk_usuario, d_fecha_renovacion, f_mensualidad,i_renovacion)
+                    VALUES ($1, $2, CURRENT_TIMESTAMP, $3, 0)`,
+                        [sk_renovacion, sk_usuario, f_mensualidad]
+                    ).then((data) => {
+                        res.status(200).json({ message: 'Usuario insertado correctamente', status: true });
+                    }).catch((error) => {
+                        console.error('Error:', error);
+                        res.status(500).json({ message: 'Hubo un error al insertar el usuario', status: false });
+                    });
                 })
                 .catch((error) => {
                     console.error('Error:', error);
@@ -340,6 +355,7 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
             s_apellido_paterno,
             s_apellido_materno,
             s_telefono,
+            f_mensualidad,
             d_fecha_nacimiento,
             d_fecha_inscripcion,
             sk_empresa
@@ -348,7 +364,7 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
         const s_foto = null; // Usamos la URL pública de la imagen
         let sk_usuario = uuidv4();
         db.none(`
-         
+        SET TIME ZONE 'America/Mexico_City';
           
           INSERT INTO cat_usuarios
           (
@@ -362,7 +378,8 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
               d_fecha_inscripcion,
               sk_estatus,
               sk_empresa,
-              d_fecha_creacion
+              d_fecha_creacion,
+              f_mensualidad
           ) VALUES (
               $1,
               $2,
@@ -374,15 +391,29 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
               TO_DATE($8, \'DD/MM/YYYY\'),
               $9,
               $10,
-              CURRENT_TIMESTAMP
-          )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion, 'AC', sk_empresa])
-            .then((data) => {
+              CURRENT_TIMESTAMP,
+              $11
+          )`, [sk_usuario, s_nombre, s_apellido_paterno, s_apellido_materno, s_telefono, s_foto, d_fecha_nacimiento, d_fecha_inscripcion, 'AC', sk_empresa, f_mensualidad]
+        ).then((data) => {
+            /* SE REGISTRARÄ UNA NUEVA RENOVACIÓN DE USUARIO */
+            let sk_renovacion = uuidv4();
+            db.none(`
+                SET TIME ZONE 'America/Mexico_City';
+                INSERT INTO rel_usuarios_renovaciones
+                (sk_renovacion, sk_usuario, d_fecha_renovacion, f_mensualidad,i_renovacion)
+                VALUES ($1, $2, CURRENT_TIMESTAMP, $3, 0)`,
+                [sk_renovacion, sk_usuario, f_mensualidad]
+            ).then((data) => {
                 res.status(200).json({ message: 'Usuario insertado correctamente', status: true });
-            })
-            .catch((error) => {
+            }).catch((error) => {
                 console.error('Error:', error);
                 res.status(500).json({ message: 'Hubo un error al insertar el usuario', status: false });
             });
+
+        }).catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al insertar el usuario', status: false });
+        });
     }
 
 
@@ -397,7 +428,6 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
         s_apellido_materno,
         s_telefono,
         d_fecha_nacimiento,
-        d_fecha_inscripcion,
     } = req.body;
 
     //en caso de que tenga imagen
@@ -427,8 +457,7 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
           s_apellido_materno = '${s_apellido_materno}',
           s_telefono = '${s_telefono}',
           s_foto = '${s_foto}',
-          d_fecha_nacimiento = TO_DATE('${d_fecha_nacimiento}', \'DD/MM/YYYY\'),
-          d_fecha_inscripcion = TO_DATE('${d_fecha_inscripcion}', \'DD/MM/YYYY\')
+          d_fecha_nacimiento = TO_DATE('${d_fecha_nacimiento}', \'DD/MM/YYYY\')
           WHERE sk_usuario = '${sk_usuario}'`)
                 .then(() => {
                     res.status(200).json({ message: 'Usuario modificado correctamente', status: true });
@@ -450,8 +479,7 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
         s_apellido_materno = '${s_apellido_materno}',
         s_telefono = '${s_telefono}',
         s_foto = s_foto,
-        d_fecha_nacimiento = TO_DATE('${d_fecha_nacimiento}', \'DD/MM/YYYY\'),
-        d_fecha_inscripcion = TO_DATE('${d_fecha_inscripcion}', \'DD/MM/YYYY\')
+        d_fecha_nacimiento = TO_DATE('${d_fecha_nacimiento}', \'DD/MM/YYYY\')
         WHERE sk_usuario = '${sk_usuario}'`)
             .then(() => {
                 res.status(200).json({ message: 'Usuario modificado correctamente', status: true });
@@ -462,9 +490,61 @@ app.post('/editar_usuario', multer.single('photo'), (req, res, next) => {
             });
 
     }
+});
 
+app.post('/renovacion_usuario', multer.single(), async (req, res) => {
+    const { sk_usuario, d_fecha_renovacion, f_mensualidad } = req.body;
+    const sk_renovacion = uuidv4();
 
+    try {
+        // Inicia una transacción
+        await db.tx(async (t) => {
+            // Verifica si ya existe una renovación para el mismo mes y usuario
+            const existingRenewal = await t.oneOrNone(`
+                SELECT sk_renovacion
+                FROM rel_usuarios_renovaciones
+                WHERE sk_usuario = $1
+                AND i_renovacion = 1
+                    AND EXTRACT(YEAR FROM d_fecha_renovacion) = EXTRACT(YEAR FROM TO_DATE($2, 'DD/MM/YYYY'))
+                    AND EXTRACT(MONTH FROM d_fecha_renovacion) = EXTRACT(MONTH FROM TO_DATE($2, 'DD/MM/YYYY'))
+                LIMIT 1`,
+                [sk_usuario, d_fecha_renovacion]
+            );
 
+            if (existingRenewal) {
+                // Si existe, actualiza la renovación existente
+                await t.none(`
+                    UPDATE rel_usuarios_renovaciones
+                    SET f_mensualidad = $1,
+                    d_fecha_renovacion = TO_DATE($2, 'DD/MM/YYYY')
+                    WHERE sk_renovacion = $3`,
+                    [f_mensualidad, d_fecha_renovacion, existingRenewal.sk_renovacion]
+                );
+            } else {
+                // Si no existe, inserta una nueva renovación
+                await t.none(`
+                    INSERT INTO rel_usuarios_renovaciones
+                        (sk_renovacion, sk_usuario, d_fecha_renovacion, f_mensualidad, i_renovacion)
+                    VALUES
+                        ($1, $2, CURRENT_TIMESTAMP, $3, 1)`,
+                    [sk_renovacion, sk_usuario, f_mensualidad]
+                );
+            }
+
+            // Actualiza la tabla cat_usuarios
+            await t.none(`
+                UPDATE cat_usuarios
+                SET f_mensualidad = $1, d_fecha_inscripcion = TO_DATE($2, 'DD/MM/YYYY')
+                WHERE sk_usuario = $3`,
+                [f_mensualidad, d_fecha_renovacion, sk_usuario]
+            );
+        });
+
+        res.status(200).json({ message: 'Renovación agregada correctamente', status: true });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ message: 'Hubo un error al renovar usuario', status: false });
+    }
 });
 
 app.post('/eliminarUsuario', (req, res) => {
@@ -507,10 +587,8 @@ app.get('/obtenerUsuarios', async (req, res) => {
         }
     }
 
-
     db.any(`
-           
-
+    SET TIME ZONE 'America/Mexico_City';
             SELECT N2.*,
             CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
@@ -571,7 +649,7 @@ app.get('/obtenerUsuarios/:sk_usuario', async (req, res) => {
     }
 
     db.one(`
-   
+    SET TIME ZONE 'America/Mexico_City';
     SELECT N2.*, 
             CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
@@ -590,6 +668,7 @@ app.get('/obtenerUsuarios/:sk_usuario', async (req, res) => {
                     cu.s_apellido_paterno,
                     cu.s_apellido_materno,
                     cu.s_telefono,
+                    cu.f_mensualidad,
                     cu.s_foto,
                     cu.s_foto AS url_foto,
                     cu.d_fecha_nacimiento,
@@ -635,7 +714,7 @@ app.get('/detalle_usuario/:sk_usuario', (req, res) => {
     const sk_usuario = req.params.sk_usuario;
 
     db.one(`
-   
+    SET TIME ZONE 'America/Mexico_City';
     SELECT N2.*, 
             CASE WHEN EXTRACT(MONTH FROM d_fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
                         AND EXTRACT(DAY FROM d_fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
@@ -679,6 +758,192 @@ app.get('/detalle_usuario/:sk_usuario', (req, res) => {
             console.error('Error:', error);
             res.status(500).json({ message: 'Hubo un error al obtener información del usuario', status: false });
         });
+})
+
+
+/* **************************ESTADISTICAS********************************* */
+
+app.get('/obtenerEstadisticas', async (req, res) => {
+    try {
+
+        const sk_empresa = req.query.sk_empresa;
+        const i_administrador = req.query.i_administrador;
+        const sk_licencia = req.query.sk_licencia;
+        const filtro = req.query.filtro;
+        const year = parseInt(req.query.year);
+
+        /* Validacion para verificar el estatus del cliente */
+
+        if (i_administrador == 0) {
+            const middelware_empresa = await verificarEstadoEmpresa(sk_empresa);
+            if (!middelware_empresa.success) {
+                return res.json(middelware_empresa)
+            }
+
+            const middelware_licencia = await verificarEstadoLicencia(sk_licencia);
+            if (!middelware_licencia.success) {
+                return res.json(middelware_licencia)
+            }
+        }
+
+        let years = [];
+
+        let primerSemestre = [];
+        let segundoSemestre = [];
+        let semanal = null;
+
+        let ganancias_primerSemestre = [];
+        let ganancias_segundoSemestre = [];
+
+        let renovaciones_primerSemestre = [];
+        let renovaciones_segundoSemestre = [];
+
+        years = await db.any(`
+        SELECT EXTRACT(YEAR FROM d_fecha_creacion) AS anio
+        FROM cat_usuarios
+        WHERE sk_empresa = $1
+        GROUP BY anio
+        ORDER BY anio;`,
+            [sk_empresa]
+        );
+
+
+        if (filtro === 'usuarios') {
+
+
+            segundoSemestre = await db.any(`
+            SELECT EXTRACT(MONTH FROM d_fecha_creacion) AS mes, COUNT(*) AS usuarios
+            FROM cat_usuarios
+            WHERE EXTRACT(MONTH FROM d_fecha_creacion) BETWEEN 7 AND 12
+            AND EXTRACT(YEAR FROM d_fecha_creacion) = $1
+            AND sk_empresa = $2
+            GROUP BY mes
+            ORDER BY mes;`,
+                [year, sk_empresa]
+            );
+
+            primerSemestre = await db.any(`
+            SELECT EXTRACT(MONTH FROM d_fecha_creacion) AS mes, COUNT(*) AS usuarios
+            FROM cat_usuarios
+            WHERE EXTRACT(MONTH FROM d_fecha_creacion) BETWEEN 1 AND 6
+            AND EXTRACT(YEAR FROM d_fecha_creacion) = $1
+            AND sk_empresa = $2
+            GROUP BY mes
+            ORDER BY mes`,
+                [year, sk_empresa]
+            );
+
+            segundoSemestre = await db.any(`
+            SELECT EXTRACT(MONTH FROM d_fecha_creacion) AS mes, COUNT(*) AS usuarios
+            FROM cat_usuarios
+            WHERE EXTRACT(MONTH FROM d_fecha_creacion) BETWEEN 7 AND 12
+            AND EXTRACT(YEAR FROM d_fecha_creacion) = $1
+            AND sk_empresa = $2
+            GROUP BY mes
+            ORDER BY mes;`,
+                [year, sk_empresa]
+            );
+
+            semanal = await db.one(`
+            SELECT COUNT(*) AS usuarios
+            FROM cat_usuarios
+            WHERE d_fecha_creacion BETWEEN date_trunc('week', current_date) AND (date_trunc('week', current_date) + interval '6 days')
+            AND EXTRACT(YEAR FROM d_fecha_creacion) = $1
+            AND sk_empresa = $2`,
+                [year, sk_empresa]
+            );
+
+        }
+
+        if (filtro === 'ingresos') {
+
+            ganancias_primerSemestre = await db.any(`
+        SELECT EXTRACT(MONTH FROM rur.d_fecha_renovacion) AS mes,
+        SUM(rur.f_mensualidad) AS total_mensualidad
+        FROM rel_usuarios_renovaciones rur
+        INNER JOIN cat_usuarios cu ON cu.sk_usuario = rur.sk_usuario
+        WHERE EXTRACT(MONTH FROM d_fecha_renovacion) BETWEEN 1 AND 6
+        AND EXTRACT(YEAR FROM d_fecha_creacion) = $1
+        AND cu.sk_empresa = $2
+        GROUP BY mes
+        ORDER BY mes;`,
+                [year, sk_empresa]
+            );
+
+            ganancias_segundoSemestre = await db.any(`
+            SELECT EXTRACT(MONTH FROM rur.d_fecha_renovacion) AS mes,
+            SUM(rur.f_mensualidad) AS total_mensualidad
+            FROM rel_usuarios_renovaciones rur
+            INNER JOIN cat_usuarios cu ON cu.sk_usuario = rur.sk_usuario
+            WHERE EXTRACT(MONTH FROM d_fecha_renovacion) BETWEEN 7 AND 12
+            AND EXTRACT(YEAR FROM d_fecha_creacion) = $1
+            AND cu.sk_empresa = $2
+            GROUP BY mes
+            ORDER BY mes;`,
+                [year, sk_empresa]
+            );
+
+        }
+
+        if (filtro === 'renovaciones') {
+
+            renovaciones_primerSemestre = await db.any(`
+            SELECT EXTRACT(MONTH FROM rur.d_fecha_renovacion) AS mes,
+            COUNT(*) AS renovaciones
+            FROM rel_usuarios_renovaciones rur
+            INNER JOIN cat_usuarios cu ON cu.sk_usuario = rur.sk_usuario
+            WHERE EXTRACT(MONTH FROM d_fecha_renovacion) BETWEEN 1 AND 6
+            AND EXTRACT(YEAR FROM d_fecha_creacion) = $1
+            AND rur.i_renovacion = 1
+            AND cu.sk_empresa = $2
+            GROUP BY mes
+            ORDER BY mes;`,
+                [year, sk_empresa]
+            );
+
+            renovaciones_segundoSemestre = await db.any(`
+            SELECT EXTRACT(MONTH FROM rur.d_fecha_renovacion) AS mes,
+            COUNT(*) AS renovaciones
+            FROM rel_usuarios_renovaciones rur
+            INNER JOIN cat_usuarios cu ON cu.sk_usuario = rur.sk_usuario
+            WHERE EXTRACT(MONTH FROM d_fecha_renovacion) BETWEEN 7 AND 12
+            AND EXTRACT(YEAR FROM d_fecha_creacion) = $1
+            AND rur.i_renovacion = 1
+            AND cu.sk_empresa = $2
+            GROUP BY mes
+            ORDER BY mes;`,
+                [year, sk_empresa]
+            );
+
+            semanal = await db.one(`
+            SELECT COUNT(*) AS renovaciones
+            FROM rel_usuarios_renovaciones rur
+            INNER JOIN cat_usuarios cu ON cu.sk_usuario = rur.sk_usuario
+            WHERE d_fecha_renovacion BETWEEN date_trunc('week', current_date) AND (date_trunc('week', current_date) + interval '6 days')
+            AND EXTRACT(YEAR FROM d_fecha_renovacion) = $1
+            AND rur.i_renovacion = 1
+            AND cu.sk_empresa = $2`,
+                [year, sk_empresa]
+            );
+
+        }
+
+        res.status(200).json({
+            datos: {
+                years,
+                primerSemestre,
+                segundoSemestre,
+                semanal,
+                ganancias_primerSemestre,
+                ganancias_segundoSemestre,
+                renovaciones_primerSemestre,
+                renovaciones_segundoSemestre
+            }, message: 'Analisis obtenidos correctamente', status: true
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ message: 'Hubo un error al renovar usuario', status: false });
+    }
 })
 
 async function deletePhoto(bucketName, filename) {
