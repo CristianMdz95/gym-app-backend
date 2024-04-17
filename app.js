@@ -39,7 +39,7 @@ const db = pgp(
 
 const app = express();
 const port = process.env.PORT ?? 3001;
-let version = process.env.VERSION ?? '1.2.1';
+let version = process.env.VERSION ?? '1.0';
 let url_descarga = process.env.URL_VERSION ?? 'https://storage.googleapis.com/gym-app-fotos/Nuevo_Version/Gym%20App%201.2.0.apk';
 
 app.use(bodyParser.json());
@@ -59,7 +59,9 @@ app.post('/login', (req, res) => {
             cl.*,
             ce.sk_estatus AS sk_estatus_empresa,
             ce.s_nombre_empresa,
-            ce.i_administrador
+            ce.i_administrador,
+            ce.s_color_primario,
+            ce.s_color_secundario
             FROM cat_licencias cl
             INNER JOIN cat_empresas ce ON ce.sk_empresa = cl.sk_empresa
             WHERE cl.s_usuario = $1
@@ -98,21 +100,21 @@ app.post('/nuevo_negocio', (req, res, next) => {
       INSERT INTO cat_empresas
       (
           sk_empresa,
-          s_usuario,
-          s_password,
           d_fecha_creacion,
           sk_estatus,
           i_administrador,
-          s_nombre_empresa
+          s_nombre_empresa,
+          s_color_primario,
+          s_color_secundario
       ) VALUES (
           $1,
+          CURRENT_TIMESTAMP,
           $2,
           $3,
-          CURRENT_TIMESTAMP,
           $4,
           $5,
           $6
-      )`, [sk_empresa, 'prueba', 'prueba', 'AC', 0, s_nombre_empresa])
+      )`, [sk_empresa, 'AC', 0, s_nombre_empresa, s_color_primario, s_color_secundario])
         .then((data) => {
             console.log(data)
             res.status(200).json({ message: 'Negocio insertado correctamente', status: true });
@@ -120,6 +122,34 @@ app.post('/nuevo_negocio', (req, res, next) => {
         .catch((error) => {
             console.error('Error:', error);
             res.status(500).json({ message: 'Hubo un error al insertar el negocio', status: false });
+        });
+
+
+
+});
+
+app.post('/editar_negocio', (req, res, next) => {
+
+    const {
+        sk_empresa,
+        s_nombre_empresa,
+        s_color_primario,
+        s_color_secundario
+    } = req.body;
+
+    db.none(`
+    UPDATE cat_empresas SET 
+    s_nombre_empresa = $1,
+    s_color_primario = $2,
+    s_color_secundario = $3
+    WHERE sk_empresa = $4`, [s_nombre_empresa, s_color_primario, s_color_secundario, sk_empresa])
+        .then((data) => {
+            console.log(data)
+            res.status(200).json({ message: 'Negocio editado correctamente', status: true });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al editar el negocio', status: false });
         });
 
 
@@ -138,10 +168,10 @@ app.post('/nueva_licencia', (req, res, next) => {
     if (req.body.sk_licencia) {
         let sk_licencia = req.body.sk_licencia;
         db.none(`
-            UPDATE cat_licencias SET 
-            s_nombre = $1,
-            s_usuario = $2,
-            s_password = $3
+            UPDATE cat_licencias SET
+    s_nombre = $1,
+        s_usuario = $2,
+        s_password = $3
             WHERE sk_licencia = $4`,
             [s_nombre, s_usuario, s_password, sk_licencia])
             .then((data) => {
@@ -160,23 +190,23 @@ app.post('/nueva_licencia', (req, res, next) => {
          
           
           INSERT INTO cat_licencias
-          (
-              sk_licencia,
-              sk_estatus,
-              s_usuario,
-              s_password,
-              d_fecha_creacion,
-              sk_empresa,
-              s_nombre
-          ) VALUES (
-              $1,
-              $2,
-              $3,
-              $4,
-              CURRENT_TIMESTAMP, 
-              $5,
-              $6
-          )`, [sk_licencia, 'AC', s_usuario, s_password, sk_empresa, s_nombre])
+        (
+            sk_licencia,
+            sk_estatus,
+            s_usuario,
+            s_password,
+            d_fecha_creacion,
+            sk_empresa,
+            s_nombre
+        ) VALUES(
+            $1,
+            $2,
+            $3,
+            $4,
+            CURRENT_TIMESTAMP,
+            $5,
+            $6
+        )`, [sk_licencia, 'AC', s_usuario, s_password, sk_empresa, s_nombre])
             .then((data) => {
                 console.log(data)
                 res.status(200).json({ message: 'Licencia creada correctamente', status: true });
@@ -193,7 +223,7 @@ app.post('/eliminar_licencia', (req, res) => {
 
     const { sk_licencia } = req.body;
 
-    db.none(`DELETE FROM cat_licencias WHERE sk_licencia = $1 `, [sk_licencia])
+    db.none(`DELETE FROM cat_licencias WHERE sk_licencia = $1`, [sk_licencia])
         .then(() => {
             res.status(200).json({ message: 'Licencia eliminada correctamente', status: true });
         })
@@ -272,7 +302,7 @@ app.post('/nuevo_usuario', multer.single('photo'), (req, res, next) => {
     if (req.file) {
         // Crea un nuevo blob en el bucket y sube los datos del archivo
         const sk_empresa_carpeta = req.body.sk_empresa;
-        const blob = bucket.file(`${sk_empresa_carpeta}/${req.file.originalname}`);
+        const blob = bucket.file(`${sk_empresa_carpeta} /${req.file.originalname}`);
         const blobStream = blob.createWriteStream();
 
         blobStream.on('error', err => {
@@ -940,6 +970,7 @@ app.get('/obtenerEstadisticas', async (req, res) => {
                 renovaciones_segundoSemestre
             }, message: 'Analisis obtenidos correctamente', status: true
         });
+
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ message: 'Hubo un error al renovar usuario', status: false });
