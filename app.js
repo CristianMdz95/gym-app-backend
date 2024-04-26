@@ -39,7 +39,7 @@ const multer = Multer({
 const pgp = require('pg-promise')();
 const db = pgp(
     process.env.DB_URL ??
-    'postgres://fl0user:6xlCBe8qOZEs@ep-wandering-snow-a55ot4r0.us-east-2.aws.neon.fl0.io:5432/gym-db?sslmode=require'
+    'postgresql://postgres:ZqjxHDejCXFwlqNoDmqEZVdwvNupUHDF@roundhouse.proxy.rlwy.net:12477/railway'
 );
 
 const app = express();
