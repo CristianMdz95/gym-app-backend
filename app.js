@@ -42,9 +42,10 @@ const db = pgp(
     'postgresql://postgres:ZqjxHDejCXFwlqNoDmqEZVdwvNupUHDF@roundhouse.proxy.rlwy.net:12477/railway'
 );
 
+console.log('process.env.DB_URL', process.env.DB_URL)
 const app = express();
 const port = process.env.PORT ?? 3001;
-let version = process.env.VERSION ?? '1.1';
+let version = process.env.VERSION ?? '1.3';
 let url_descarga = process.env.URL_VERSION ?? 'https://storage.googleapis.com/gym-app-fotos/Nuevo_Version/Gym%20App%201.2.0.apk';
 
 app.use(bodyParser.json());
