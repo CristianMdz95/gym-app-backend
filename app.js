@@ -1014,7 +1014,7 @@ cron.schedule('0 7 * * *', () => {
 
 });
 
-/* 5:00 pm */
+/* 3:00 pm */
 cron.schedule('0 15 * * *', () => {
 
     notificacion_cumpleañeros();
@@ -1022,13 +1022,42 @@ cron.schedule('0 15 * * *', () => {
 
 });
 
+/* 6:00 pm */
+cron.schedule('0 18 * * *', () => {
+
+    notificacion_cumpleañeros();
+    notificacion_dias();
+
+});
+
+app.get('/enviarNotificacion', async (req, res) => {
+    try {
+        notificacion_cumpleañeros();
+        notificacion_dias();
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ message: 'Hubo un error al renovar usuario', status: false });
+    }
+})
 
 const notificacion_cumpleañeros = async () => {
+    console.log('notificacion_cumpleañeros');
     const today = moment().tz('America/Mexico_City').format('YYYY-MM-DD');
 
+    const [year, mes, dia] = today.split('-')
     let array_token = [];
 
-    usuarios = await db.any(`SELECT * FROM cat_usuarios WHERE d_fecha_nacimiento = $1`, [today])
+    usuarios = await db.any(`
+    SELECT * FROM (
+        SELECT 
+          cu.*,
+            EXTRACT ( DAY FROM d_fecha_nacimiento ) AS dia,
+            EXTRACT ( MONTH FROM d_fecha_nacimiento ) AS mes
+        FROM
+            cat_usuarios cu
+    ) AS N1 
+    WHERE dia = $1
+    AND mes = $2`, [dia, mes])
 
     for (usuario of usuarios) {
         tokens = await db.any(`SELECT * FROM rel_licencias_notificaciones WHERE sk_empresa = $1`, [usuario?.sk_empresa])
@@ -1056,7 +1085,7 @@ const notificacion_cumpleañeros = async () => {
 }
 
 const notificacion_dias = async () => {
-
+    console.log('notificacion_dias');
     let array_token = [];
 
     usuarios = await db.any(`SELECT N2.* FROM (
@@ -1100,7 +1129,6 @@ const notificacion_dias = async () => {
             console.error('Error al enviar la notificación:', error);
         });
 }
-
 
 
 //************************************************************** */
