@@ -1,17 +1,22 @@
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { Expo } = require('expo-server-sdk');
 const express = require('express');
 const Multer = require('multer');
 const path = require('path');
 //const moment = require('moment');
 const moment = require('moment-timezone');
 
+const expo = new Expo();
+const cron = require('node-cron');
+
 // Establece la zona horaria para México
 moment.tz.setDefault('America/Mexico_City');
 
 //GOOGLE CLOUD
 const { Storage } = require('@google-cloud/storage');
+const { title } = require('process');
 
 // Configura Google Cloud Storage
 const storage = new Storage({
@@ -39,7 +44,7 @@ const db = pgp(
 
 const app = express();
 const port = process.env.PORT ?? 3001;
-let version = process.env.VERSION ?? '1.0';
+let version = process.env.VERSION ?? '1.1';
 let url_descarga = process.env.URL_VERSION ?? 'https://storage.googleapis.com/gym-app-fotos/Nuevo_Version/Gym%20App%201.2.0.apk';
 
 app.use(bodyParser.json());
@@ -50,8 +55,6 @@ app.use('/storage', express.static(path.join(__dirname, 'storage'))); //Para def
 
 
 // SET TIME ZONE 'America/Mexico_City';
-
-
 app.post('/login', (req, res) => {
     const { s_usuario, s_password } = req.body;
 
@@ -977,6 +980,130 @@ app.get('/obtenerEstadisticas', async (req, res) => {
     }
 })
 
+/* NOTIFICACIONES */
+app.post('/registrar_notificacion', (req, res, next) => {
+
+    const { s_token_notificacion, sk_empresa, sk_licencia } = req.body;
+    let sk_licencia_notificacion = uuidv4();
+
+    db.none(`
+    INSERT INTO 
+    rel_licencias_notificaciones
+    VALUES ($1, $2, $3, $4)`,
+        [sk_licencia_notificacion, sk_licencia, s_token_notificacion, sk_empresa])
+        .then((data) => {
+            res.status(200).json({ message: 'Notificaciones registradas con éxito', status: true });
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            res.status(500).json({ message: 'Hubo un error al editar el negocio', status: false });
+        });
+
+
+
+});
+
+/* TAREA AUTOMATICAS */
+
+/* 7:00 am */
+cron.schedule('0 7 * * *', () => {
+
+    notificacion_cumpleañeros();
+    notificacion_dias();
+
+});
+
+/* 5:00 pm */
+cron.schedule('0 15 * * *', () => {
+
+    notificacion_cumpleañeros();
+    notificacion_dias();
+
+});
+
+
+const notificacion_cumpleañeros = async () => {
+    const today = moment().tz('America/Mexico_City').format('YYYY-MM-DD');
+
+    let array_token = [];
+
+    usuarios = await db.any(`SELECT * FROM cat_usuarios WHERE d_fecha_nacimiento = $1`, [today])
+
+    for (usuario of usuarios) {
+        tokens = await db.any(`SELECT * FROM rel_licencias_notificaciones WHERE sk_empresa = $1`, [usuario?.sk_empresa])
+        for (token of tokens) {
+            array_token.push(token?.s_token_notificacion)
+        }
+    }
+
+    const message = {
+        to: array_token,
+        sound: 'default',
+        title: '¡Hoy tenemos cumpleañeros! 🎂',
+        body: 'Ingresa a la aplicación para mandarle un mensaje de felicitaciones automático desde el detalle del usuario.',
+        data: { anyData: 'puedes incluir datos adicionales aquí' },
+    };
+
+    expo.sendPushNotificationsAsync([message])
+        .then((receipts) => {
+            // Maneja las respuestas (puede haber errores, etc.)
+            console.log('Cumpleañeros', receipts);
+        })
+        .catch((error) => {
+            console.error('Error al enviar la notificación:', error);
+        });
+}
+
+const notificacion_dias = async () => {
+
+    let array_token = [];
+
+    usuarios = await db.any(`SELECT N2.* FROM (
+        SELECT N1.*,
+            DATE_PART('day', N1.d_fecha_renovacion - CURRENT_DATE) AS dias_restantes
+        FROM (
+            SELECT 
+                CONCAT(cu.s_nombre) AS s_nombre_completo,
+                cu.d_fecha_inscripcion + INTERVAL '1 month' AS d_fecha_renovacion,
+                cu.sk_empresa,
+                cu.sk_estatus
+            FROM cat_usuarios cu
+            INNER JOIN cat_empresas ce ON ce.sk_empresa = cu.sk_empresa
+            WHERE cu.sk_estatus = 'AC'
+        ) AS N1 
+     ) AS N2 WHERE N2.dias_restantes <= 1 AND N2.dias_restantes >= 0
+    ORDER BY N2.dias_restantes`)
+
+
+    for (usuario of usuarios) {
+        tokens = await db.any(`SELECT * FROM rel_licencias_notificaciones WHERE sk_empresa = $1`, [usuario?.sk_empresa])
+        for (token of tokens) {
+            array_token.push(token?.s_token_notificacion)
+        }
+    }
+
+    const message = {
+        to: array_token,
+        sound: 'default',
+        title: '¡Usuarios próximos a vencer! 🗓️',
+        body: 'Se acerca la fecha de renovación para algunos usuarios en tu aplicación',
+        data: { anyData: 'puedes incluir datos adicionales aquí' },
+    };
+
+    expo.sendPushNotificationsAsync([message])
+        .then((receipts) => {
+            // Maneja las respuestas (puede haber errores, etc.)
+            console.log('Cumpleañeros', receipts);
+        })
+        .catch((error) => {
+            console.error('Error al enviar la notificación:', error);
+        });
+}
+
+
+
+//************************************************************** */
+
 async function deletePhoto(bucketName, filename) {
     await storage.bucket(bucketName).file(filename).delete();
 }
@@ -1028,6 +1155,8 @@ async function verificarEstadoLicencia(sk_licencia) {
 
     return result
 }
+
+//************************************************************** */
 
 app.listen(port, () => {
     console.log(`Aplicación GYM APP Corriendo en el puerto ${port}`);
