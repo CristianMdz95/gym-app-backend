@@ -1009,31 +1009,31 @@ app.post('/registrar_notificacion', (req, res, next) => {
 /* 7:00 am */
 cron.schedule('0 7 * * *', () => {
 
-    notificacion_cumpleañeros();
-    notificacion_dias();
+    /*     notificacion_cumpleañeros();
+        notificacion_dias(); */
 
 });
 
 /* 3:00 pm */
 cron.schedule('0 15 * * *', () => {
 
-    notificacion_cumpleañeros();
-    notificacion_dias();
+    /*     notificacion_cumpleañeros();
+        notificacion_dias(); */
 
 });
 
 /* 6:00 pm */
 cron.schedule('0 18 * * *', () => {
 
-    notificacion_cumpleañeros();
-    notificacion_dias();
+    /*     notificacion_cumpleañeros();
+        notificacion_dias(); */
 
 });
 
 app.get('/enviarNotificacion', async (req, res) => {
     try {
-        notificacion_cumpleañeros();
-        notificacion_dias();
+        //notificacion_cumpleañeros();
+        //notificacion_dias();
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ message: 'Hubo un error al renovar usuario', status: false });
