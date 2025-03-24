@@ -7,25 +7,17 @@ const Multer = require("multer");
 const path = require("path");
 //const moment = require('moment');
 const moment = require("moment-timezone");
-
+const axios = require("axios");
 const expo = new Expo();
 const cron = require("node-cron");
-
+let TIME_CRON_PRUEBA = process.env.TIME_CRON ?? "0 0 29 2 1";
 // Establece la zona horaria para México
 moment.tz.setDefault("America/Mexico_City");
 
 //GOOGLE CLOUD SEGURIDAD
 const { Storage } = require("@google-cloud/storage");
-
-/* Google Notifications */
-const admin = require("firebase-admin");
-const serviceAccount = process.env.google_services_account || {}; // Ruta al archivo de clave
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
-
 const { title } = require("process");
-
+const admin = require("firebase-admin");
 // Configura Google Cloud Storage
 const storage = new Storage({
   projectId: "certain-router-414905",
@@ -39,6 +31,25 @@ const storage = new Storage({
 const bucket_name = "gym-app-fotos";
 
 const bucket = storage.bucket(bucket_name);
+
+/* Google Notifications */
+
+async function initializarNotificaciones() {
+  try {
+    const serviceAccountUrl =
+      "https://storage.googleapis.com/gym-app-fotos/licencias/nextpay-122de-03ec65d253b7.json";
+    const response = await axios.get(serviceAccountUrl);
+    const serviceAccount = response.data;
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } catch (error) {
+    console.error("Error al obtener las credenciales:", error);
+  }
+}
+
+initializarNotificaciones();
+
 // Configura Multer para subir los archivos a la memoria como Buffer
 const multer = Multer({
   storage: Multer.memoryStorage(),
