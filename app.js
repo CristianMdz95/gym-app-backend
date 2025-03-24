@@ -54,10 +54,10 @@ const db = pgp(
     "postgresql://postgres:ZqjxHDejCXFwlqNoDmqEZVdwvNupUHDF@roundhouse.proxy.rlwy.net:12477/railway"
 );
 
+console.log("process.env.DB_URL", process.env.DB_URL);
 const app = express();
 const port = process.env.PORT ?? 3001;
-let version = process.env.VERSION ?? "1.1";
-let TIME_CRON_PRUEBA = process.env.TIME_CRON ?? "0 0 29 2 1";
+let version = process.env.VERSION ?? "1.3";
 let url_descarga =
   process.env.URL_VERSION ??
   "https://storage.googleapis.com/gym-app-fotos/Nuevo_Version/Gym%20App%201.2.0.apk";
@@ -335,11 +335,11 @@ app.post("/cambiarEstatusCliente", (req, res) => {
 });
 
 app.post("/cambiarEstatusLicencia", (req, res) => {
-  const { sk_estatus, sk_licencia_cliente } = req.body;
+  const { sk_estatus, sk_licencia } = req.body;
 
   db.none("UPDATE cat_licencias SET sk_estatus = $1 WHERE sk_licencia = $2", [
     sk_estatus,
-    sk_licencia_cliente,
+    sk_licencia,
   ])
     .then(() => {
       res.status(200).json({
@@ -1155,67 +1155,37 @@ app.get("/obtenerEstadisticas", async (req, res) => {
   }
 });
 
-/* ******************************NOTIFICACIONES****************************************** */
-app.post("/registrar_notificacion", async (req, res, next) => {
+/* NOTIFICACIONES */
+app.post("/registrar_notificacion", (req, res, next) => {
   const { s_token_notificacion, sk_empresa, sk_licencia } = req.body;
+  let sk_licencia_notificacion = uuidv4();
 
-  try {
-    // Verificar si el token ya está registrado para la misma licencia
-    const existingToken = await db.oneOrNone(
-      `SELECT s_token_notificacion  FROM rel_licencias_notificaciones 
-        WHERE sk_licencia = $1 AND sk_empresa = $2`,
-      [sk_licencia, sk_empresa]
-    );
-
-    if (existingToken) {
-      if (existingToken.s_token_notificacion === s_token_notificacion) {
-        return res.status(200).json({
-          message: "El token ya está registrado, sin cambios.",
-          status: true,
-        });
-      }
-
-      // Si el token cambió, actualizarlo
-      await db.none(
-        `UPDATE rel_licencias_notificaciones 
-        SET s_token_notificacion = $1 
-        WHERE sk_licencia = $2 AND sk_empresa = $3`,
-        [s_token_notificacion, sk_licencia, sk_empresa]
-      );
-
-      return res.status(200).json({
-        message: "Token actualizado con éxito.",
+  db.none(
+    `
+    INSERT INTO 
+    rel_licencias_notificaciones
+    VALUES ($1, $2, $3, $4)`,
+    [sk_licencia_notificacion, sk_licencia, s_token_notificacion, sk_empresa]
+  )
+    .then((data) => {
+      res.status(200).json({
+        message: "Notificaciones registradas con éxito",
         status: true,
       });
-    }
-
-    // Si no existe, insertarlo
-    let sk_licencia_notificacion = uuidv4();
-
-    await db.none(
-      `INSERT INTO rel_licencias_notificaciones 
-      VALUES ($1, $2, $3, $4)`,
-      [sk_licencia_notificacion, sk_licencia, s_token_notificacion, sk_empresa]
-    );
-
-    res.status(200).json({
-      message: "Notificación registrada con éxito.",
-      status: true,
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      res
+        .status(500)
+        .json({ message: "Hubo un error al editar el negocio", status: false });
     });
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({
-      message: "Hubo un error al registrar la notificación.",
-      status: false,
-    });
-  }
 });
 
 /* ******************************TAREA AUTOMATICAS*************************************** */
 
 /* prueba cada minuto */
 cron.schedule(TIME_CRON_PRUEBA, () => {
-  notificacion_cumpleañeros_expo();
+  notificacion_cumpleañeros_firebase();
   /* notificacion_dias();  */
 });
 
@@ -1249,72 +1219,55 @@ app.get("/enviarNotificacion", async (req, res) => {
   }
 });
 
-const notificacion_cumpleañeros_expo = async () => {
-  console.log("🔔 Enviando notificaciones de cumpleaños...");
+const notificacion_cumpleañeros = async () => {
+  console.log("notificacion_cumpleañeros");
   const today = moment().tz("America/Mexico_City").format("YYYY-MM-DD");
 
   const [year, mes, dia] = today.split("-");
-  let array_token = new Set(); // Usamos un Set para evitar duplicados
+  let array_token = [];
 
-  try {
-    const usuarios = await db.any(
-      `SELECT * FROM (
-          SELECT 
-            cu.*,
-              EXTRACT (DAY FROM d_fecha_nacimiento) AS dia,
-              EXTRACT (MONTH FROM d_fecha_nacimiento) AS mes
-          FROM cat_usuarios cu
-      ) AS N1 
-      WHERE dia = $1 AND mes = $2`,
-      [dia, mes]
+  usuarios = await db.any(
+    `
+    SELECT * FROM (
+        SELECT 
+          cu.*,
+            EXTRACT ( DAY FROM d_fecha_nacimiento ) AS dia,
+            EXTRACT ( MONTH FROM d_fecha_nacimiento ) AS mes
+        FROM
+            cat_usuarios cu
+    ) AS N1 
+    WHERE dia = $1
+    AND mes = $2`,
+    [dia, mes]
+  );
+
+  for (usuario of usuarios) {
+    tokens = await db.any(
+      `SELECT * FROM rel_licencias_notificaciones WHERE sk_empresa = $1`,
+      [usuario?.sk_empresa]
     );
-
-    for (const usuario of usuarios) {
-      const tokens = await db.any(
-        `SELECT s_token_notificacion FROM rel_licencias_notificaciones WHERE sk_empresa = $1`,
-        [usuario?.sk_empresa]
-      );
-
-      tokens.forEach((token) => array_token.add(token.s_token_notificacion));
+    for (token of tokens) {
+      array_token.push(token?.s_token_notificacion);
     }
-
-    // Convertimos el Set a Array
-    const tokensArray = Array.from(array_token);
-
-    if (tokensArray.length === 0) {
-      console.log("⚠ No hay tokens para enviar notificaciones.");
-      return;
-    }
-
-    // Enviar notificaciones en lotes de 100
-    for (let i = 0; i < tokensArray.length; i += 100) {
-      const chunk = tokensArray.slice(i, i + 100);
-      const messages = chunk.map((token) => ({
-        to: token,
-        sound: "default",
-        title: "🎉 ¡Hoy tenemos cumpleañeros!",
-        body: "Ingresa a la app y felicita a los cumpleañeros de hoy. 🎂🥳",
-        data: { anyData: "puedes incluir datos adicionales aquí" },
-        android: {
-          icon: "./assets/icons/notification-icon.png",
-          largeIcon: "./assets/icons/notification-large-icon.png",
-          color: "#ffffff",
-        },
-      }));
-
-      try {
-        const receipts = await expo.sendPushNotificationsAsync(messages);
-        console.log(
-          `✅ Notificaciones enviadas (${i + 1}-${i + messages.length}):`,
-          receipts
-        );
-      } catch (error) {
-        console.error("❌ Error al enviar notificaciones:", error);
-      }
-    }
-  } catch (error) {
-    console.error("❌ Error en notificacion_cumpleañeros:", error);
   }
+
+  const message = {
+    to: array_token,
+    sound: "default",
+    title: "¡Hoy tenemos cumpleañeros! 🎂",
+    body: "Ingresa a la aplicación para mandarle un mensaje de felicitaciones automático desde el detalle del usuario.",
+    data: { anyData: "puedes incluir datos adicionales aquí" },
+  };
+
+  expo
+    .sendPushNotificationsAsync([message])
+    .then((receipts) => {
+      // Maneja las respuestas (puede haber errores, etc.)
+      console.log("Cumpleañeros", receipts);
+    })
+    .catch((error) => {
+      console.error("Error al enviar la notificación:", error);
+    });
 };
 
 const notificacion_cumpleañeros_firebase = async () => {
