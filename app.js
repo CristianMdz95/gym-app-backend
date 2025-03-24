@@ -7,7 +7,7 @@ const Multer = require("multer");
 const path = require("path");
 //const moment = require('moment');
 const moment = require("moment-timezone");
-
+const admin = require("firebase-admin");
 const expo = new Expo();
 const cron = require("node-cron");
 
@@ -16,6 +16,15 @@ moment.tz.setDefault("America/Mexico_City");
 
 //GOOGLE CLOUD
 const { Storage } = require("@google-cloud/storage");
+
+/* Google Notifications */
+const serviceAccount = require("./google-service-account.json"); // Ruta al archivo de clave
+
+// Inicializar Firebase Admin SDK con las credenciales del archivo JSON
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
 const { title } = require("process");
 
 // Configura Google Cloud Storage
@@ -1207,7 +1216,7 @@ app.post("/registrar_notificacion", async (req, res, next) => {
 
 /* prueba cada minuto */
 cron.schedule(TIME_CRON_PRUEBA, () => {
-  notificacion_cumpleañeros();
+  notificacion_cumpleañeros_expo();
   /* notificacion_dias();  */
 });
 
@@ -1241,7 +1250,7 @@ app.get("/enviarNotificacion", async (req, res) => {
   }
 });
 
-const notificacion_cumpleañeros = async () => {
+const notificacion_cumpleañeros_expo = async () => {
   console.log("🔔 Enviando notificaciones de cumpleaños...");
   const today = moment().tz("America/Mexico_City").format("YYYY-MM-DD");
 
@@ -1296,6 +1305,74 @@ const notificacion_cumpleañeros = async () => {
 
       try {
         const receipts = await expo.sendPushNotificationsAsync(messages);
+        console.log(
+          `✅ Notificaciones enviadas (${i + 1}-${i + messages.length}):`,
+          receipts
+        );
+      } catch (error) {
+        console.error("❌ Error al enviar notificaciones:", error);
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error en notificacion_cumpleañeros:", error);
+  }
+};
+
+const notificacion_cumpleañeros_firebase = async () => {
+  console.log("🔔 Enviando notificaciones de cumpleaños...");
+  const today = moment().tz("America/Mexico_City").format("YYYY-MM-DD");
+
+  const [year, mes, dia] = today.split("-");
+  let array_token = new Set(); // Usamos un Set para evitar duplicados
+
+  try {
+    const usuarios = await db.any(
+      `SELECT * FROM (
+          SELECT 
+            cu.*,
+              EXTRACT (DAY FROM d_fecha_nacimiento) AS dia,
+              EXTRACT (MONTH FROM d_fecha_nacimiento) AS mes
+          FROM cat_usuarios cu
+      ) AS N1 
+      WHERE dia = $1 AND mes = $2`,
+      [dia, mes]
+    );
+
+    for (const usuario of usuarios) {
+      const tokens = await db.any(
+        `SELECT s_token_notificacion FROM rel_licencias_notificaciones WHERE sk_empresa = $1`,
+        [usuario?.sk_empresa]
+      );
+
+      tokens.forEach((token) => array_token.add(token.s_token_notificacion));
+    }
+
+    // Convertimos el Set a Array
+    const tokensArray = Array.from(array_token);
+
+    if (tokensArray.length === 0) {
+      console.log("⚠ No hay tokens para enviar notificaciones.");
+      return;
+    }
+
+    // Enviar notificaciones en lotes de 100
+    for (let i = 0; i < tokensArray.length; i += 100) {
+      const chunk = tokensArray.slice(i, i + 100);
+      const messages = chunk.map((token) => ({
+        to: token,
+        sound: "default",
+        title: "🎉 ¡Hoy tenemos cumpleañeros!",
+        body: "Ingresa a la app y felicita a los cumpleañeros de hoy. 🎂🥳",
+        data: { anyData: "puedes incluir datos adicionales aquí" },
+        android: {
+          icon: "./assets/icons/notification-icon.png",
+          largeIcon: "./assets/icons/notification-large-icon.png",
+          color: "#ffffff",
+        },
+      }));
+
+      try {
+        const response = await admin.messaging().sendAll(messages);
         console.log(
           `✅ Notificaciones enviadas (${i + 1}-${i + messages.length}):`,
           receipts
