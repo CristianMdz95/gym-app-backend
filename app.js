@@ -14,7 +14,7 @@ const cron = require("node-cron");
 // Establece la zona horaria para México
 moment.tz.setDefault("America/Mexico_City");
 
-//GOOGLE CLOUD
+//GOOGLE CLOUD SEGURIDAD
 const { Storage } = require("@google-cloud/storage");
 
 /* Google Notifications */
