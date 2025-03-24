@@ -7,7 +7,7 @@ const Multer = require("multer");
 const path = require("path");
 //const moment = require('moment');
 const moment = require("moment-timezone");
-const admin = require("firebase-admin");
+
 const expo = new Expo();
 const cron = require("node-cron");
 
@@ -18,9 +18,8 @@ moment.tz.setDefault("America/Mexico_City");
 const { Storage } = require("@google-cloud/storage");
 
 /* Google Notifications */
-const serviceAccount = require("./google-service-account.json"); // Ruta al archivo de clave
-
-// Inicializar Firebase Admin SDK con las credenciales del archivo JSON
+const admin = require("firebase-admin");
+const serviceAccount = JSON.parse(process.env.google_services_account || {}); // Ruta al archivo de clave
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
